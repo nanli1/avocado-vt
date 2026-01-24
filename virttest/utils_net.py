@@ -22,6 +22,7 @@ import aexpect
 import six
 from aexpect import remote
 from avocado.core import exceptions
+from avocado.utils import distro
 from avocado.utils import path as utils_path
 from avocado.utils import process, stacktrace
 from six.moves import xrange
@@ -1699,6 +1700,10 @@ def get_dhcp_client(session):
     :return: tuple of dhcp command and its release argument, raises TestError if none found
     """
     dhcp_clients = [("dhclient", "-r"), ("dhcpcd", "-k")]
+    if distro.detect().name == "rhel" and int(distro.detect().version) >= 10:
+        dhcp_clients = dhcp_clients[1]
+    else:
+        dhcp_clients = dhcp_clients[0]
 
     for cmd, release_flag in dhcp_clients:
         status, _ = utils_misc.cmd_status_output(
@@ -4856,12 +4861,12 @@ def delete_linux_bridge_tmux(
     :return: bridge deleted or raise exception
     """
     # Check if bridge exists based on session type
+    br_path = "/sys/class/net/%s" % linux_bridge_name
     if session:
         # For remote sessions, check bridge existence via command
-        bridge_exists = session.cmd_status("ip link show %s" % linux_bridge_name) == 0
+        bridge_exists = session.cmd_status("ls %s " % br_path) == 0
     else:
         # For local execution, check filesystem
-        br_path = "/sys/class/net/%s" % linux_bridge_name
         bridge_exists = os.path.exists(br_path)
 
     if not bridge_exists:
@@ -4875,8 +4880,8 @@ def delete_linux_bridge_tmux(
             f"{dhcp_cmd} {release_flag} {linux_bridge_name} || true; "
             f"{dhcp_cmd} {release_flag} {iface_name} || true; "
             f"ip link delete {linux_bridge_name}; "
-            "sleep 5; "
-            f"{dhcp_cmd} {iface_name}"
+            f"sleep 5;"
+            f'{dhcp_cmd} {iface_name}"'
         )
     else:
         cmd = "ip link delete %s" % linux_bridge_name
